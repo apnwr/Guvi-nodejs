@@ -2,6 +2,7 @@ const express = require("express");
 const mongodb = require("mongodb");
 const cors = require('cors');
 const dotenv = require('dotenv');  // for confidential informations
+const bcrypt = require('bcrypt');
 
 dotenv.config(); 
 
@@ -93,6 +94,64 @@ app.delete("/delete-user/:id", async (req, res) => {
     }
 })
 
+
+app.post('/register', async(req, res) => {
+    try {
+        let client = await mongodb.connect(dbUrl);
+        let db = client.db("my_db");
+        let data = await db.collection("users").findOne({ email: req.body.email });
+        if (data) {
+            res.status(400).json({
+                message : "User already existed"
+            })
+        } else {
+            //registration part
+            let salt = await bcrypt.genSalt(10); // generating salt
+            let hash = await bcrypt.hash(req.body.password, salt); //hashed value
+            req.body.password = hash;
+            let result = db.collection("users").insertOne(req.body);
+            res.status(200).json({
+                message :  "User registered"
+            })
+        }
+        client.close();
+    }
+    catch (err) {
+        console.log(err);
+        res.send(500);
+    }
+})
+
+app.post('/login', async (req, res) => {
+    try {
+        let client = await mongodb.connect(dbUrl);
+        let db = client.db("my_db");
+        let data = await db.collection("users").findOne({
+            email: req.body.email
+        });
+        if (data) {
+            let isValid = await bcrypt.compare(req.body.password, data.password);
+            if (isValid) {
+                res.status(200).json({
+                  message:  "Login Successful"
+                })
+            } else {
+                res.status(401).json({
+                    message: "Login Unsuccessful"
+                })
+            }
+
+        } else {
+            res.status(400).json({
+                message: "User not registered"
+            })
+        }
+        client.close();
+    } catch (err) {
+        console.log(err);
+        res.send(500);
+    }
+})
 
 app.listen(port, () => {
     console.log(`The application is running successfully with port : ${port}`)
